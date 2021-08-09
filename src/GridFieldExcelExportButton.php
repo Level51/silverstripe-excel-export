@@ -14,6 +14,7 @@ use SilverStripe\Forms\GridField\GridField_HTMLProvider;
 use SilverStripe\Forms\GridField\GridField_URLHandler;
 use SilverStripe\Forms\GridField\GridFieldFilterHeader;
 use SilverStripe\Forms\GridField\GridFieldSortableHeader;
+use SilverStripe\Forms\GridField\GridFieldPaginator;
 
 class GridFieldExcelExportButton implements GridField_HTMLProvider, GridField_ActionProvider, GridField_URLHandler {
 
@@ -24,6 +25,11 @@ class GridFieldExcelExportButton implements GridField_HTMLProvider, GridField_Ac
     protected $exportColumns;
 
     protected $targetFragment;
+
+    /**
+     * @var callable
+     */
+    protected $afterExportCallback;
 
     public function __construct($targetFragment = 'before', $exportColumns = null) {
         $this->targetFragment = $targetFragment;
@@ -102,6 +108,9 @@ class GridFieldExcelExportButton implements GridField_HTMLProvider, GridField_Ac
         // Write headers
         $sheet->fromArray($headers, null, 'A1');
 
+        //Remove GridFieldPaginator as we're going to export the entire list.
+        $gridField->getConfig()->removeComponentsByType(GridFieldPaginator::class);
+
         // Collect items / content rows (@see GridFieldExportButton)
         $items = $gridField->getManipulatedList();
 
@@ -157,17 +166,43 @@ class GridFieldExcelExportButton implements GridField_HTMLProvider, GridField_Ac
         $sheet->fromArray($content, null, 'A2');
 
         // Auto size column width
-        // TODO prepare for larger ranges
-        foreach (range('A', range('A', 'Z')[count($headers)]) as $columnID) {
-            $sheet->getColumnDimension($columnID)
+        $headerRow = $sheet->getRowIterator(1,1)->current();
+
+        foreach ($headerRow->getCellIterator() as $cell) {
+            $sheet->getColumnDimension($cell->getColumn())
                 ->setAutoSize(true);
         }
 
         // Write xlsx file
         $writer = new Xlsx($spreadsheet);
+
+        if ($callback = $this->getAfterExportCallback()) {
+            $callback($writer);
+        }
+
         $writer->save($path);
 
         // Read and return file content (triggers download) (MIME Type: https://blogs.msdn.microsoft.com/vsofficedeveloper/2008/05/08/office-2007-file-format-mime-types-for-http-content-streaming-2/)
         return HTTPRequest::send_file(file_get_contents($path), $fileName, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    }
+
+    /**
+     *
+     * @return callable
+     */
+    public function getAfterExportCallback()
+    {
+        return $this->afterExportCallback;
+    }
+
+    /**
+     *
+     * @param callable $afterExportCallback
+     * @return ExcelGridFieldExportButton
+     */
+    public function setAfterExportCallback(callable $afterExportCallback)
+    {
+        $this->afterExportCallback = $afterExportCallback;
+        return $this;
     }
 }
