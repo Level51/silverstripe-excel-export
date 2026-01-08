@@ -200,7 +200,7 @@ class GridFieldExcelExportButton implements GridField_HTMLProvider, GridField_Ac
     /**
      *
      * @param callable $afterExportCallback
-     * @return ExcelGridFieldExportButton
+     * @return GridFieldExcelExportButton
      */
     public function setAfterExportCallback(callable $afterExportCallback)
     {
